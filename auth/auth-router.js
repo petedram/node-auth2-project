@@ -10,6 +10,10 @@ const bcrypt = require('bcryptjs');
 // This allows us to look users up, add them to the database, etc.
 const Users = require('../users/users-model.js');
 
+const jwt = require('jsonwebtoken');
+const secrets = require('../config/secrets.js');
+
+
 //----------------------------------------------------------------------------//
 // POST /api/auth/register
 //
@@ -51,10 +55,15 @@ router.post('/register', (req, res) => {
     // right version.)
     const hash = bcrypt.hashSync(user.password, 7);
     user.password = hash;
+    console.log('hash', hash)
+    console.log('user', user)
 
     Users.add(user)
         .then(saved => {
-            res.status(201).json(saved);
+        // pass the created user into the genToken() method, and get the token
+        const token = genToken(saved);
+        // return the user object, and the token.
+        res.status(201).json({ created_user: saved, token: token });
         })
         .catch(error => {
             res.status(500).json(error);
@@ -160,8 +169,9 @@ router.post('/login', (req, res) => {
                 // and a set-cookie header to be sent back to the browser.
                 // Exactly what we want. 
 
-                req.session.user = username;
-                res.status(200).json({ message: `Logged in ${user.username}!`, });
+                const token = genToken(user)
+                // req.session.user = username;
+                res.status(200).json({ username: user.username, token: token });
             } else {
                 // req.session.user will not exist if we end up here... see
                 // above... so we are not in danger of a session being created -
@@ -184,21 +194,81 @@ router.post('/login', (req, res) => {
 // destroying things is part of CRUD, the part that lines up with the DELETE
 // HTTP method. So, we will implement /logout as a DELETE request...
 //----------------------------------------------------------------------------//
-router.delete('/logout', (req, res) => {
-    if (req.session) {
-        // check out the documentation for this method at
-        // https://www.npmjs.com/package/express-session, under
-        // Session.destroy().
-        req.session.destroy((err) => {
-            if (err) {
-                res.status(400).json({ message: 'error logging out:', error: err });
-            } else {
-                res.json({ message: 'logged out'  });
-            }
-        });
-    } else {
-        res.end();
-    }
-});
+// router.delete('/logout', (req, res) => {
+//     if (req.session) {
+//         // check out the documentation for this method at
+//         // https://www.npmjs.com/package/express-session, under
+//         // Session.destroy().
+//         req.session.destroy((err) => {
+//             if (err) {
+//                 res.status(400).json({ message: 'error logging out:', error: err });
+//             } else {
+//                 res.json({ message: 'logged out'  });
+//             }
+//         });
+//     } else {
+//         res.end();
+//     }
+// });
+
+// You cannot manually expire a token after it has been created. Thus, you cannot log out with JWT on the server-side as you do with sessions.
+
+// JWT is stateless, meaning that you should store everything you need in the payload and skip performing a DB query on every request. But if you plan to have a strict log out functionality, that cannot wait for the token auto-expiration, even though you have cleaned the token from the client-side, then you might need to neglect the stateless logic and do some queries. so what's a solution?
+
+// Set a reasonable expiration time on tokens
+
+// Delete the stored token from client-side upon log out
+
+// Query provided token against The Blacklist on every authorized request
+
+
+function genToken(user) {
+
+    // create the payload...
+    const payload = {
+      userid: user.id,
+      username: user.username,
+      // this could be more sophisticated, like looking up the user's "roles" from
+      // a database, and adding them to this token. A hierarchy of privileges
+      // could be established as well, and an entire library for managing rights.
+      // This is not a new problem, and many creative patterns and packages have
+      // been created to solve it (the ability to manage privileges/roles, etc.)
+      // If you are interested, look up these topics:
+      //    * Role-based access control (RBAC)
+      //      https://en.wikipedia.org/wiki/Role-based_access_control
+      //    * Access Control List (ACL)
+      //      https://en.wikipedia.org/wiki/Access-control_list 
+      // 
+      // For now, we are just hard-coding a string in an array, and checking
+      // elsewhere to see if a certain string is included in this array... pretty
+      // primitive, but you get the idea. 
+      department: user.department
+      // other things: rights/privileges? other info?     
+    };
+    // the syntax for specifing an expiration time with jsonwebtoken package is
+    // somewhat intuitive. In addition to this ASCII/text method, you could
+    // calculate "Seconds Since Epoch", which is known through Unix-like systems
+    // as the number of elapsed seconds since midnight, January 1, 1970, in the
+    // UTC timezone (aka GMT). See https://en.wikipedia.org/wiki/Epoch_(computing)
+    // Note that specifying an "expires in" value specifies an amount of time that
+    // must elapse for the token to be considered "expired". 
+    //
+    // For instructions you should follow (both on the client and server side)
+    // with respect to JWT's,  you should read the RFC (Request For Comments)
+    // document that defines the JWT format and use. See
+    // https://tools.ietf.org/html/rfc7519. 
+    // 
+    // For an understanding of what an RFC is, enjoy this little bit of light
+    // reading: https://en.wikipedia.org/wiki/Request_for_Comments 
+    // 
+    // See section 4.1.4, as well as the definition of "NumericDate" in Section 2.
+    // If you think that managing time on computers and across the Internet and
+    // around the world is simple, you have not studied the topic... dive in, have
+    // fun! 
+    const options = { expiresIn: '2h' };
+    const token = jwt.sign(payload, secrets.jwtSecret, options);
+  
+    return token;
+  }
 
 module.exports = router;

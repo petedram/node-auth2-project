@@ -5,7 +5,8 @@ const express = require('express');
 const helmet = require('helmet');
 const cors = require('cors');
 
-const restricted = require('../auth/restricted-middleware.js');
+const jwt = require('jsonwebtoken');
+
 
 // express routers
 const usersRouter = require("../users/users-router.js");
@@ -27,42 +28,60 @@ const server = express();
 // note that the options under "store:" are for connect-session-knex. You can
 // read about them under that module at npmjs.org.
 //----------------------------------------------------------------------------//
-const sessionConfig = {
-  name: 'my-cookie',
-  secret: 'mysecret',
-  cookie: {
-    maxAge: 3600 * 1000,
-    secure: false, // should be true in production
-    httpOnly: true
-  },
-  resave: false,
-  saveUninitialized: false,
+// const sessionConfig = {
+//   name: 'my-cookie',
+//   secret: 'mysecret',
+//   cookie: {
+//     maxAge: 3600 * 1000,
+//     secure: false, // should be true in production
+//     httpOnly: true
+//   },
+//   resave: false,
+//   saveUninitialized: false,
 
-  store: new knexSessionStore(
-    {
-      knex: require("../data/dbConfig"),
-      tablename: "sessions",
-      sidfieldname: "sid",
-      createtable: true,
-      clearInterval: 3600 * 1000
-    }
-  )
-}
+//   store: new knexSessionStore(
+//     {
+//       knex: require("../data/dbConfig"),
+//       tablename: "sessions",
+//       sidfieldname: "sid",
+//       createtable: true,
+//       clearInterval: 3600 * 1000
+//     }
+//   )
+// }
 
 // global middleware
 server.use(helmet());
 server.use(express.json());
 server.use(cors());
 
-server.use(session(sessionConfig));
+// server.use(session(sessionConfig));
 
-server.use("/api/users", restricted, usersRouter);
+server.use("/api/users", usersRouter);
 server.use("/api/auth", authRouter);
 
 
 server.get("/", (req, res) => {
-  res.json({ api: "up" });
+  res.send("It's alive!!!");
 });
+
+server.get('/token', (req, res) => {
+
+  const payload = {
+    subject: 'thisuser',
+    userid: 'skirkby',
+    favoriteChili: 'habanero'
+  };
+
+  const secret = 'wethotuwasatoad';
+  const options = {
+    expiresIn: '1h'
+  };
+
+  const token = jwt.sign(payload, secret, options);
+
+  res.json(token);
+})
 
 
 module.exports = server;
