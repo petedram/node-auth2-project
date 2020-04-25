@@ -211,6 +211,9 @@ router.post('/login', (req, res) => {
 //     }
 // });
 
+//Remove from local storage to logout....
+
+
 // You cannot manually expire a token after it has been created. Thus, you cannot log out with JWT on the server-side as you do with sessions.
 
 // JWT is stateless, meaning that you should store everything you need in the payload and skip performing a DB query on every request. But if you plan to have a strict log out functionality, that cannot wait for the token auto-expiration, even though you have cleaned the token from the client-side, then you might need to neglect the stateless logic and do some queries. so what's a solution?
